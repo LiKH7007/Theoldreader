@@ -211,6 +211,8 @@ OpenAI / DeepSeek 模式下，邮件会按期刊分组输出，而不是先按 `
 每篇研究条目必须说明：
 
 ```text
+英文题名
+作者 / 一作 / 通讯作者
 材料/体系
 新现象/机制
 为什么重要
@@ -222,6 +224,8 @@ OpenAI / DeepSeek 模式下，每篇进入正文的研究条目都必须按下�
 
 ```text
 1. [必读][高] 论文中文题名
+英文题名：original English title
+作者：一作：First Author；通讯作者：摘要未说明；作者列表：Author A, Author B, Author C 等
 来源：订阅源 | reader date | DOI/link
 
 1. 材料/体系：...

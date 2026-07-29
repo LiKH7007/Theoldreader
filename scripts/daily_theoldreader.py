@@ -634,14 +634,17 @@ def literature_digest_messages(rows: list[dict[str, str]]) -> list[dict[str, str
            2. [值得下载][中高] 中文题名
            3. [扫读即可][中] 中文题名
            重要性标签只能用 [高]、[中高]、[中]、[低]。
-        5. 每篇研究条目必须使用完全相同的 1-5 五项结构，不允许只写摘要，不要用短横线列表替代：
+        5. 每篇标题后必须紧跟三行识别信息，格式固定：
+           **英文题名：** original English title
+           **作者：** 一作：First Author；通讯作者：摘要未说明/Corresponding Author；作者列表：若 RSS 提供则列出，太长可写前 3 名 + 等
+           **来源：** feed | reader date | DOI/link
+           不要猜通讯作者；如果 RSS/摘要没有写通讯作者，必须写“通讯作者：摘要未说明”。
+        6. 每篇研究条目必须使用完全相同的 1-5 五项结构，不允许只写摘要，不要用短横线列表替代：
            1. **材料/体系：** 写清具体材料、体系、对象或数据集；未知则写“摘要未说明”。
            2. **新现象/机制：** 写清新现象、新机制、新方法或新设计；未知则写“摘要未说明”。
            3. **为什么重要：** 给出你对论文重要性的判断，连接到材料科学问题、瓶颈或潜在应用；不要空泛说“很重要”。
            4. **证据来源：** 说明依据来自 RSS 摘要、网页摘要、题名推断或摘要不足，并点明实验/计算/表征/模拟/数据集等证据类型。
            5. **建议：** 明确写“下载精读 / 下载复核 / 扫读图文 / 暂跳过”，并说明理由。
-        6. 每篇研究条目在五项前保留 DOI 或链接，格式为：
-           **来源：** feed | reader date | DOI/link
         7. 如果 summary_source 是 rss_insufficient，必须写“摘要不足，需要打开网页复核”，并且不要列为 [必读]。
         8. 如果是生活、新闻、非学术、纯广告或无法判断的条目，忽略正文并说明已过滤数量。
         9. 输出适合直接作为邮件正文的 Markdown；不要输出“好的，这是……”等寒暄；正文第一行必须是“# 材料科学文献雷达 | 日期”。
@@ -837,7 +840,14 @@ def markdown_digest_to_html(markdown_text: str) -> str:
             html_lines.append(f"<h2>{rendered}</h2>")
         elif re.match(r"^\d+\.\s+\[", line):
             html_lines.append(f"<h3>{rendered}</h3>")
-        elif line.startswith("**来源：**") or line.startswith("**来源:**"):
+        elif (
+            line.startswith("**来源：**")
+            or line.startswith("**来源:**")
+            or line.startswith("**英文题名：**")
+            or line.startswith("**英文题名:**")
+            or line.startswith("**作者：**")
+            or line.startswith("**作者:**")
+        ):
             html_lines.append(f"<p class=\"source\">{rendered}</p>")
         elif re.match(r"^\d+[\.）]\s*\*\*", line) or line.startswith("- **"):
             html_lines.append(f"<p class=\"field\">{rendered}</p>")
