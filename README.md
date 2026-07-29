@@ -1,5 +1,33 @@
 # The Old Reader 每日文献邮件 Action
-
+-------------------------------------------------------------
+1. Fork 或下载你的仓库
+让他先打开你的仓库：
+LiKH7007/Theoldreader
+然后点右上角 Fork，复制一份到自己的 GitHub 账号下。
+或者用 git 下载到本地：
+git clone https://github.com/他的用户名/Theoldreader.git
+cd Theoldreader
+2. 准备 Python 环境
+电脑上需要有 Python 3.10 或 3.11。
+安装依赖：
+python -m pip install -r requirements.txt
+3. 获取 The Old Reader Token
+运行：
+python scripts\get_tor_token.py --email "他的 The Old Reader 邮箱"
+然后根据提示输入 The Old Reader 密码。
+程序会输出一个 token。这个 token 只能放进 GitHub Secrets，不能写进代码、README、截图、聊天记录。
+4. 准备发件邮箱 SMTP
+他需要一个可以 SMTP 发邮件的邮箱，比如 163、QQ、Gmail 等。
+以 163 邮箱为例，通常是：
+SMTP_HOST = smtp.163.com
+SMTP_PORT = 465
+SMTP_SSL = true
+SMTP_USER = 他的发件邮箱
+SMTP_PASSWORD = 邮箱 SMTP 授权码
+MAIL_FROM = 他的发件邮箱
+MAIL_TO = 接收文献邮件的邮箱
+注意：SMTP_PASSWORD 通常不是网页登录密码，而是邮箱里单独生成的“SMTP 授权码”
+----------------------------------------------------------------
 这个仓库用于每天自动读取 The Old Reader 的订阅源最新更新，并把摘要整理成邮件发送。
 
 当前默认规则：
