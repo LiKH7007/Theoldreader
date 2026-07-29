@@ -34,12 +34,14 @@ MAIL_TO = 接收文献邮件的邮箱
 
 1. 每天北京时间 08:00 自动运行。
 2. 读取 The Old Reader `SUBSCRIPTIONS` 中所有订阅源，不限定期刊。
-3. 默认抓取最近 24 小时内的最新条目。
-4. 默认不限制邮件条目数量；当天抓到多少就处理多少。
-5. 只总结 RSS 摘要或网页摘要，不下载、不读取 PDF。
-6. 如果 RSS 摘要太短，脚本会尝试打开原网页补 `meta description`、`citation_abstract` 或 Abstract 段落。
-7. 有 `OPENAI_API_KEY` 时优先生成中文文献雷达；没有 OpenAI 时可用腾讯云机器翻译；都不可用时发送基础列表。
-8. 所有 token、邮箱授权码和 API key 都只放在 GitHub Secrets，不写进仓库。
+3. “不限定订阅源”只表示抓取范围宽；最终邮件默认只保留学术/论文条目。
+4. 默认过滤生活、购物、财经、娱乐、系统博客等非学术 feed，例如 Apartment Therapy、Man of Many、The Old Reader blog。
+5. 默认抓取最近 24 小时内的最新条目。
+6. 默认不限制邮件条目数量；当天识别到多少文献就处理多少。
+7. 只总结 RSS 摘要或网页摘要，不下载、不读取 PDF。
+8. 如果 RSS 摘要太短，脚本会尝试打开原网页补 `meta description`、`citation_abstract` 或 Abstract 段落。
+9. 有 `OPENAI_API_KEY` 时优先生成中文文献雷达；没有 OpenAI 时可用腾讯云机器翻译，但腾讯云只做翻译 fallback，不做真正的论文优劣判断。
+10. 所有 token、邮箱授权码和 API key 都只放在 GitHub Secrets，不写进仓库。
 
 ## 文件结构
 
@@ -127,6 +129,7 @@ Settings -> Secrets and variables -> Actions -> Variables
 | `TOR_MAX_ITEMS` | `0` | 邮件最多处理多少条；`0` 表示不限制 |
 | `TOR_MIN_SUMMARY_CHARS` | `120` | RSS 摘要少于多少字符时尝试打开网页补摘要 |
 | `TOR_FETCH_ARTICLE_PAGE` | `true` | 是否在摘要不足时打开原网页补摘要 |
+| `TOR_INCLUDE_NON_RESEARCH` | `false` | 是否把生活/财经/系统 feed 等非学术条目也放进邮件正文；默认过滤 |
 | `TENCENT_REGION` | `ap-beijing` | 腾讯云机器翻译地域 |
 | `TENCENT_TARGET` | `zh` | 腾讯云目标语言，中文为 `zh` |
 
@@ -142,6 +145,7 @@ TOR_LOOKBACK_HOURS = 24
 TOR_ONLY_UNREAD = false
 TOR_MAX_ITEMS = 0
 TOR_FETCH_ARTICLE_PAGE = true
+TOR_INCLUDE_NON_RESEARCH = false
 ```
 
 如果不用 OpenAI，只想翻译摘要：
@@ -152,7 +156,7 @@ TENCENT_REGION = ap-beijing
 TENCENT_TARGET = zh
 ```
 
-这种模式只翻译标题和摘要，不会真正判断论文优劣。
+这种模式只翻译标题和摘要，不会真正判断论文优劣。脚本仍会先过滤明显非学术条目，避免把生活资讯翻译成文献简报。
 
 ## 阅读准则
 
@@ -182,6 +186,8 @@ OpenAI 模式下，邮件会按文献雷达格式输出：
 ```
 
 脚本不会下载或读取 PDF。
+
+如果订阅源里混有生活、购物、财经、娱乐或 The Old Reader 系统 feed，默认不会进入文献雷达正文，只会在邮件末尾显示“已过滤”数量。如果你确实想审计所有订阅更新，可以把 `TOR_INCLUDE_NON_RESEARCH` 设为 `true`。
 
 ## 手动运行测试
 

@@ -61,7 +61,8 @@ def main() -> None:
     story.append(p("1. 这个 Action 做什么", h1))
     story.append(p(
         "GitHub Actions 每天北京时间 08:00 启动，读取 The Old Reader 的 SUBSCRIPTIONS 中所有订阅源，抓取最近 24 小时内的最新条目。"
-        "脚本只基于 RSS 摘要或网页摘要生成邮件，不下载 PDF。若配置 OpenAI，则生成中文文献雷达；若没有 OpenAI 但配置腾讯云机器翻译，则翻译标题和摘要；都没有时发送基础列表。",
+        "不限定订阅源只代表抓取范围宽；最终邮件默认只保留学术/论文条目，并过滤生活、财经、购物、娱乐和系统 feed。"
+        "脚本只基于 RSS 摘要或网页摘要生成邮件，不下载 PDF。若配置 OpenAI，则生成中文文献雷达；若没有 OpenAI 但配置腾讯云机器翻译，则只做标题和摘要翻译 fallback；都没有时发送基础列表。",
         body,
     ))
 
@@ -103,6 +104,7 @@ def main() -> None:
         ["TOR_MAX_ITEMS", "0", "邮件最多处理多少条。0 表示不人为限制数量。"],
         ["TOR_MIN_SUMMARY_CHARS", "120", "RSS 摘要低于该长度时，尝试打开原网页补摘要。"],
         ["TOR_FETCH_ARTICLE_PAGE", "true", "是否在摘要不足时请求文章网页。"],
+        ["TOR_INCLUDE_NON_RESEARCH", "false", "是否把非学术 feed 也放进正文；默认 false，只在末尾报告过滤数量。"],
         ["TENCENT_REGION", "ap-beijing", "腾讯云机器翻译地域。"],
         ["TENCENT_TARGET", "zh", "腾讯云目标语言，中文为 zh。"],
     ]
@@ -125,11 +127,11 @@ def main() -> None:
     story.append(p("6. 推荐配置", h1))
     story.append(p("有 OpenAI 时：", h2))
     story.append(p(
-        "DIGEST_PROVIDER = auto\nOPENAI_MODEL = gpt-4.1-mini\nTOR_SOURCE_MODE = subscriptions_latest\nTOR_LOOKBACK_HOURS = 24\nTOR_ONLY_UNREAD = false\nTOR_MAX_ITEMS = 0\nTOR_FETCH_ARTICLE_PAGE = true",
+        "DIGEST_PROVIDER = auto\nOPENAI_MODEL = gpt-4.1-mini\nTOR_SOURCE_MODE = subscriptions_latest\nTOR_LOOKBACK_HOURS = 24\nTOR_ONLY_UNREAD = false\nTOR_MAX_ITEMS = 0\nTOR_FETCH_ARTICLE_PAGE = true\nTOR_INCLUDE_NON_RESEARCH = false",
         code,
     ))
     story.append(p("只用腾讯云翻译时：", h2))
-    story.append(p("DIGEST_PROVIDER = tencent\nTENCENT_REGION = ap-beijing\nTENCENT_TARGET = zh", code))
+    story.append(p("DIGEST_PROVIDER = tencent\nTENCENT_REGION = ap-beijing\nTENCENT_TARGET = zh\nTOR_INCLUDE_NON_RESEARCH = false", code))
 
     story.append(PageBreak())
     story.append(p("7. 运行测试", h1))

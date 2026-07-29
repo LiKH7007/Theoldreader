@@ -36,6 +36,31 @@ LOCAL_TZ = ZoneInfo("Asia/Shanghai")
 TAG_RE = re.compile(r"<[^>]+>")
 DOI_RE = re.compile(r"(10\.\d{4,9}/[-._;()/:A-Z0-9]+)", re.I)
 ISSUE_RE = re.compile(r"issue information|\(adv\. mater\.\s*\d+/\d{4}\)", re.I)
+ACADEMIC_FEED_RE = re.compile(
+    r"journal|materials?|materialia|nature|npj|wiley|sciencedirect|elsevier|springer|"
+    r"acs|rsc|aip|aps|iop|arxiv|pubmed|science|cell|advanced|nano|energy|chem|"
+    r"physics|physical review|acta|scripta|ceramics|metallurgy|biomaterials",
+    re.I,
+)
+ACADEMIC_URL_RE = re.compile(
+    r"doi\.org|nature\.com|sciencedirect\.com|onlinelibrary\.wiley\.com|"
+    r"springer\.com|acs\.org|rsc\.org|aip\.org|aps\.org|iopscience|arxiv\.org|"
+    r"pubs\.acs|tandfonline|mdpi\.com|frontiersin|science\.org|cell\.com",
+    re.I,
+)
+RESEARCH_TEXT_RE = re.compile(
+    r"\b(abstract|we report|we demonstrate|we show|we find|this study|in this work|"
+    r"synthesis|characterization|density functional|DFT|molecular dynamics|"
+    r"microscopy|spectroscopy|electrochemical|photocatal|perovskite|alloy|oxide|"
+    r"nanoparticle|heterostructure|phase transition|microstructure|phonon|thermal)\b",
+    re.I,
+)
+NON_ACADEMIC_FEED_RE = re.compile(
+    r"apartment therapy|get rich slowly|what if\?|the old reader|daily what|"
+    r"man of many|cheezburger|shopping|decor|home|lifestyle|personal finance|"
+    r"sneakers|food|travel|entertainment",
+    re.I,
+)
 ABSTRACT_RE = re.compile(
     r"(?:abstract|summary)\s*[:\n]\s*(.{120,2500}?)(?:\n\s*(?:introduction|keywords|references|全文|图文)|$)",
     re.I | re.S,
@@ -323,6 +348,61 @@ def normalize_items(items: list[dict[str, Any]]) -> list[dict[str, str]]:
     return rows
 
 
+def classify_row(row: dict[str, str]) -> str:
+    """Classify an entry before digesting so broad subscriptions stay literature-only."""
+
+    feed = row.get("feed", "")
+    title = row.get("title", "")
+    url = row.get("url", "")
+    summary = row.get("summary", "")
+
+    if ISSUE_RE.search(title):
+        return "issue/metadata"
+    if NON_ACADEMIC_FEED_RE.search(feed):
+        return "non-academic"
+    if row.get("doi") or ACADEMIC_FEED_RE.search(feed) or ACADEMIC_URL_RE.search(url):
+        return "research-paper"
+    if RESEARCH_TEXT_RE.search(f"{title} {summary}"):
+        return "academic-adjacent"
+    return "non-academic"
+
+
+def split_literature_rows(rows: list[dict[str, str]]) -> tuple[list[dict[str, str]], dict[str, int]]:
+    include_non_research = as_bool("TOR_INCLUDE_NON_RESEARCH", False)
+    kept: list[dict[str, str]] = []
+    skipped = {"non-academic": 0, "issue/metadata": 0}
+
+    for row in rows:
+        item_class = classify_row(row)
+        row["item_class"] = item_class
+        if include_non_research or item_class in {"research-paper", "academic-adjacent"}:
+            kept.append(row)
+        else:
+            skipped[item_class] = skipped.get(item_class, 0) + 1
+
+    return kept, skipped
+
+
+def skipped_note(skipped: dict[str, int]) -> str:
+    total = sum(skipped.values())
+    if total <= 0:
+        return ""
+    lines = ["", "## 已过滤", ""]
+    if skipped.get("non-academic", 0):
+        lines.append(f"- 非学术/生活/系统订阅源：{skipped['non-academic']} 条，未进入文献雷达正文。")
+    if skipped.get("issue/metadata", 0):
+        lines.append(f"- 期刊目录、封面、勘误或 issue metadata：{skipped['issue/metadata']} 条，已跳过。")
+    return "\n".join(lines)
+
+
+def no_literature_digest(original_count: int, skipped: dict[str, int]) -> str:
+    return (
+        "# The Old Reader Daily Radar\n\n"
+        f"今天抓到 {original_count} 条订阅源更新，但没有识别到适合进入文献雷达的学术论文条目。"
+        f"{skipped_note(skipped)}"
+    ).strip()
+
+
 def fallback_digest(rows: list[dict[str, str]]) -> str:
     if not rows:
         return "今天 The Old Reader 的订阅源在设定时间窗口内没有抓到新条目。"
@@ -553,6 +633,10 @@ def ai_digest(rows: list[dict[str, str]]) -> str:
 
 
 def make_digest(rows: list[dict[str, str]]) -> str:
+    literature_rows, skipped = split_literature_rows(rows)
+    if not literature_rows:
+        return no_literature_digest(len(rows), skipped)
+
     provider = getenv("DIGEST_PROVIDER", "auto").lower()
     openai_ready = bool(getenv("OPENAI_API_KEY"))
     tencent_ready = has_tencent_credentials()
@@ -564,16 +648,18 @@ def make_digest(rows: list[dict[str, str]]) -> str:
     if provider in {"tencent", "tmt", "tencent-tmt"}:
         if not tencent_ready:
             print("DIGEST_PROVIDER=tencent was requested, but Tencent secrets are missing.", file=sys.stderr)
-            return fallback_digest(rows)
-        return tencent_digest(rows)
+            body = fallback_digest(literature_rows)
+        else:
+            body = tencent_digest(literature_rows)
+        return f"{body}{skipped_note(skipped)}"
 
     if provider == "openai":
-        return ai_digest(rows)
+        return f"{ai_digest(literature_rows)}{skipped_note(skipped)}"
 
     if provider not in {"auto", ""}:
         print(f"Unknown DIGEST_PROVIDER={provider!r}; using auto.", file=sys.stderr)
 
-    return ai_digest(rows)
+    return f"{ai_digest(literature_rows)}{skipped_note(skipped)}"
 
 
 def send_email(subject: str, body: str) -> None:
