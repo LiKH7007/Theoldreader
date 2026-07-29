@@ -34,7 +34,8 @@ ISSUE_RE = re.compile(r"issue information|\(adv\. mater\.\s*\d+/\d{4}\)", re.I)
 
 
 def getenv(name: str, default: str = "") -> str:
-    return os.environ.get(name, default).strip()
+    value = os.environ.get(name, "").strip()
+    return value or default
 
 
 def require_env(name: str) -> str:
@@ -213,18 +214,22 @@ def ai_digest(rows: list[dict[str, str]]) -> str:
         ],
         "temperature": 0.2,
     }
-    response = requests.post(
-        "https://api.openai.com/v1/responses",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json=payload,
-        timeout=120,
-    )
-    response.raise_for_status()
-    text = parse_openai_text(response.json())
-    return text or fallback_digest(rows)
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/responses",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=120,
+        )
+        response.raise_for_status()
+        text = parse_openai_text(response.json())
+        return text or fallback_digest(rows)
+    except requests.RequestException as exc:
+        print(f"OpenAI summarization failed; sending fallback digest instead: {exc}", file=sys.stderr)
+        return fallback_digest(rows)
 
 
 def send_email(subject: str, body: str) -> None:

@@ -133,6 +133,8 @@ Settings -> Secrets and variables -> Actions -> Variables
 
 不想折腾的话，这一步可以先跳过。
 
+如果 `OPENAI_API_KEY` 没配、填错或额度不足，脚本会自动退回基础列表邮件，不会因为中文摘要失败而中断整个任务。
+
 ## 第 5 步：手动运行一次测试
 
 第一次建议手动运行，不要等第二天。
@@ -167,6 +169,18 @@ SMTPAuthenticationError
 ```
 
 通常是邮箱账号或 SMTP 授权码错了。
+
+```text
+OpenAI summarization failed; sending fallback digest instead
+```
+
+说明 AI 摘要失败了，但脚本会继续发送基础列表邮件。可以稍后再检查 `OPENAI_API_KEY` 或 `OPENAI_MODEL`。
+
+```text
+Node.js 20 is deprecated
+```
+
+这是 GitHub Actions 官方 action 版本的提示，不是脚本失败原因。当前 workflow 已经使用新版 `actions/checkout` 和 `actions/setup-python`。
 
 ## 第 6 步：确认每天定时
 
