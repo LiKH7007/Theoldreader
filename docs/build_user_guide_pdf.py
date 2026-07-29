@@ -125,12 +125,13 @@ def main() -> None:
     ]))
 
     story.append(p("5. 如何修改发送时间", h1))
-    story.append(p("GitHub Actions cron 使用 UTC。北京时间 = UTC + 8。当前默认每天北京时间 08:00：", body))
+    story.append(p("发送时间在 .github/workflows/daily.yml 里修改，找到 schedule 下面的 cron 那一行。GitHub Actions cron 使用 UTC。北京时间 = UTC + 8。当前默认每天北京时间 08:00：", body))
     story.append(p('- cron: "0 0 * * *"', code))
     story.append(p("改成北京时间 07:00：", body))
     story.append(p('- cron: "0 23 * * *"', code))
     story.append(p("改成北京时间 21:00：", body))
     story.append(p('- cron: "0 13 * * *"', code))
+    story.append(p("新手修改步骤：打开仓库页面 -> 进入 .github/workflows/daily.yml -> 点铅笔编辑 -> 修改 cron -> Commit changes。", body))
 
     story.append(p("6. 推荐配置", h1))
     story.append(p("有 OpenAI 时：", h2))
