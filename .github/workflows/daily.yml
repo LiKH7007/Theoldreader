@@ -37,4 +37,8 @@ jobs:
           MAIL_TO: ${{ secrets.MAIL_TO }}
           TOR_LIMIT: ${{ vars.TOR_LIMIT }}
           TOR_MAX_ITEMS: ${{ vars.TOR_MAX_ITEMS }}
+          TENCENT_SECRET_ID: ${{ secrets.TENCENT_SECRET_ID }}
+          TENCENT_SECRET_KEY: ${{ secrets.TENCENT_SECRET_KEY }}
+          TENCENT_REGION: ${{ vars.TENCENT_REGION }}
+          TENCENT_TARGET: ${{ vars.TENCENT_TARGET }}
         run: python scripts/daily_theoldreader.py

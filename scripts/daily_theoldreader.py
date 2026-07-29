@@ -16,6 +16,7 @@ import smtplib
 import ssl
 import sys
 import textwrap
+import time
 import urllib.parse
 from email.message import EmailMessage
 from email.utils import formatdate
@@ -170,6 +171,80 @@ def fallback_digest(rows: list[dict[str, str]]) -> str:
     return "\n".join(lines).strip()
 
 
+def tencent_secret(name: str) -> str:
+    return getenv(name) or getenv(f"TENCENTCLOUD_{name.removeprefix('TENCENT_')}")
+
+
+def has_tencent_credentials() -> bool:
+    return bool(tencent_secret("TENCENT_SECRET_ID") and tencent_secret("TENCENT_SECRET_KEY"))
+
+
+def build_tencent_client():
+    from tencentcloud.common import credential
+    from tencentcloud.common.profile.client_profile import ClientProfile
+    from tencentcloud.common.profile.http_profile import HttpProfile
+    from tencentcloud.tmt.v20180321 import tmt_client
+
+    cred = credential.Credential(tencent_secret("TENCENT_SECRET_ID"), tencent_secret("TENCENT_SECRET_KEY"))
+    http_profile = HttpProfile()
+    http_profile.endpoint = getenv("TENCENT_TMT_ENDPOINT", "tmt.tencentcloudapi.com")
+    client_profile = ClientProfile()
+    client_profile.httpProfile = http_profile
+    return tmt_client.TmtClient(cred, getenv("TENCENT_REGION", "ap-beijing"), client_profile)
+
+
+def translate_with_tencent(client: Any, text: str, source: str = "auto", target: str = "zh") -> str:
+    from tencentcloud.tmt.v20180321 import models
+
+    text = " ".join((text or "").split())
+    if not text:
+        return ""
+    req = models.TextTranslateRequest()
+    req.SourceText = text[:1800]
+    req.Source = source
+    req.Target = target
+    req.ProjectId = 0
+    resp = client.TextTranslate(req)
+    return resp.TargetText
+
+
+def tencent_digest(rows: list[dict[str, str]]) -> str:
+    if not rows:
+        return fallback_digest(rows)
+    if not has_tencent_credentials():
+        return fallback_digest(rows)
+
+    try:
+        client = build_tencent_client()
+        target = getenv("TENCENT_TARGET", "zh")
+        lines = ["# The Old Reader Daily Digest", "", "翻译服务：腾讯云机器翻译", ""]
+        for index, row in enumerate(rows, 1):
+            title_zh = translate_with_tencent(client, row["title"], target=target)
+            time.sleep(0.25)
+            summary_zh = ""
+            if row["summary"]:
+                summary_zh = translate_with_tencent(client, row["summary"][:900], target=target)
+                time.sleep(0.25)
+
+            lines.append(f"{index}. {title_zh or row['title']}")
+            lines.append(f"   - 原题: {row['title']}")
+            if row["feed"]:
+                lines.append(f"   - 来源: {row['feed']}")
+            if row["doi"]:
+                lines.append(f"   - DOI: {row['doi']}")
+            if row["url"]:
+                lines.append(f"   - 链接: {row['url']}")
+            if summary_zh:
+                lines.append(f"   - 摘要: {summary_zh}")
+            elif row["summary"]:
+                lines.append(f"   - 摘要: {row['summary'][:300]}")
+            lines.append("")
+        return "\n".join(lines).strip()
+    except Exception as exc:
+        print(f"Tencent translation failed; sending fallback digest instead: {exc}", file=sys.stderr)
+        return fallback_digest(rows)
+
+
 def parse_openai_text(data: dict[str, Any]) -> str:
     if isinstance(data.get("output_text"), str):
         return data["output_text"].strip()
@@ -185,7 +260,7 @@ def parse_openai_text(data: dict[str, Any]) -> str:
 def ai_digest(rows: list[dict[str, str]]) -> str:
     api_key = getenv("OPENAI_API_KEY")
     if not api_key or not rows:
-        return fallback_digest(rows)
+        return tencent_digest(rows) if has_tencent_credentials() else fallback_digest(rows)
 
     model = getenv("OPENAI_MODEL", "gpt-4.1-mini")
     prompt = textwrap.dedent(
@@ -228,8 +303,8 @@ def ai_digest(rows: list[dict[str, str]]) -> str:
         text = parse_openai_text(response.json())
         return text or fallback_digest(rows)
     except requests.RequestException as exc:
-        print(f"OpenAI summarization failed; sending fallback digest instead: {exc}", file=sys.stderr)
-        return fallback_digest(rows)
+        print(f"OpenAI summarization failed; trying Tencent translation instead: {exc}", file=sys.stderr)
+        return tencent_digest(rows) if has_tencent_credentials() else fallback_digest(rows)
 
 
 def send_email(subject: str, body: str) -> None:

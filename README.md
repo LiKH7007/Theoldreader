@@ -7,8 +7,10 @@
 1. GitHub Actions 按定时规则启动一台临时 Linux 机器。
 2. 这台机器运行 `scripts/daily_theoldreader.py`。
 3. 脚本用 `TOR_TOKEN` 访问 The Old Reader API。
-4. 如果配置了 `OPENAI_API_KEY`，脚本会生成中文文献雷达摘要；没配置也会发送基础列表。
-5. 脚本用 SMTP 把结果发到你的邮箱。
+4. 如果配置了 `OPENAI_API_KEY`，脚本会生成中文文献雷达摘要。
+5. 如果没配置 OpenAI，但配置了腾讯云机器翻译，脚本会把标题和摘要翻译成中文。
+6. 如果两者都没配置，脚本会发送基础列表。
+7. 脚本用 SMTP 把结果发到你的邮箱。
 
 注意：Codex skill 本身不能直接作为 GitHub Actions 运行。skill 是“给 Codex 看的说明书”，Actions 能运行的是脚本，所以这里已经把流程写成了 Python 脚本。
 
@@ -113,6 +115,17 @@ Settings -> Secrets and variables -> Actions -> New repository secret
 | `MAIL_FROM` | 是 | 发件人邮箱，通常和 `SMTP_USER` 一样 |
 | `MAIL_TO` | 是 | 收件人邮箱 |
 | `OPENAI_API_KEY` | 否 | 配了会生成 AI 中文摘要，不配也能发基础列表 |
+| `TENCENT_SECRET_ID` | 否 | 腾讯云 API 密钥 SecretId |
+| `TENCENT_SECRET_KEY` | 否 | 腾讯云 API 密钥 SecretKey |
+
+如果你想用腾讯云翻译，至少添加：
+
+```text
+TENCENT_SECRET_ID
+TENCENT_SECRET_KEY
+```
+
+注意：`SecretKey` 只在腾讯云创建密钥时显示一次，后面不能再次查看。不要发到聊天里，也不要写进仓库。
 
 ## 第 4 步：配置可选 Variables
 
@@ -130,10 +143,31 @@ Settings -> Secrets and variables -> Actions -> Variables
 | `SMTP_SSL` | `true` | 是否使用 SMTP SSL |
 | `TOR_LIMIT` | `100` | 从 The Old Reader 最多抓多少条 |
 | `TOR_MAX_ITEMS` | `30` | 邮件里最多处理多少条 |
+| `TENCENT_REGION` | `ap-beijing` | 腾讯云机器翻译地域 |
+| `TENCENT_TARGET` | `zh` | 腾讯云目标语言，中文用 `zh` |
 
 不想折腾的话，这一步可以先跳过。
 
-如果 `OPENAI_API_KEY` 没配、填错或额度不足，脚本会自动退回基础列表邮件，不会因为中文摘要失败而中断整个任务。
+如果 `OPENAI_API_KEY` 没配、填错或额度不足，脚本会自动尝试腾讯云翻译。腾讯云也没配置时，才退回基础列表邮件。
+
+## 第 4.1 步：开通腾讯云机器翻译
+
+如果你想用腾讯云免费额度做中文翻译，按这个流程：
+
+1. 打开 [腾讯云机器翻译快速入门](https://cloud.tencent.com/document/product/551/104415)。
+2. 登录腾讯云账号，并完成实名。
+3. 进入机器翻译控制台，勾选服务协议后开通服务。
+4. 打开 [API 密钥管理](https://console.cloud.tencent.com/cam/capi)。
+5. 点击 `新建密钥`。
+6. 保存 `SecretId` 和 `SecretKey`。
+7. 回到 GitHub 仓库，添加 Repository secrets：
+
+```text
+TENCENT_SECRET_ID = 你的 SecretId
+TENCENT_SECRET_KEY = 你的 SecretKey
+```
+
+腾讯云官方文档当前说明：文本翻译有免费额度，免费额度用完后，后付费默认关闭；如未开启后付费，一般会停服而不是自动扣费。具体以你的腾讯云控制台为准。
 
 ## 第 5 步：手动运行一次测试
 
@@ -174,7 +208,13 @@ SMTPAuthenticationError
 OpenAI summarization failed; sending fallback digest instead
 ```
 
-说明 AI 摘要失败了，但脚本会继续发送基础列表邮件。可以稍后再检查 `OPENAI_API_KEY` 或 `OPENAI_MODEL`。
+说明 AI 摘要失败了。脚本会继续尝试腾讯云翻译；如果腾讯云没配置，则发送基础列表邮件。可以稍后再检查 `OPENAI_API_KEY` 或 `OPENAI_MODEL`。
+
+```text
+Tencent translation failed; sending fallback digest instead
+```
+
+说明腾讯云翻译失败了，但脚本会继续发送基础列表邮件。常见原因是 `TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY` 填错、机器翻译服务没开通、地域配置不合适，或免费额度用完。
 
 ```text
 Node.js 20 is deprecated
@@ -267,3 +307,6 @@ git push origin main
 
 - [The Old Reader Apps](https://www.theoldreader.com/en/apps/)：说明它提供 Google Reader 风格 API，并提示第三方 App/API 需要用户名密码。
 - [The Old Reader API](https://github.com/theoldreader/api)：说明获取 token 使用 `/accounts/ClientLogin`，请求 API 时使用 `Authorization: GoogleLogin auth=TOKEN`。
+- [腾讯云机器翻译快速入门](https://cloud.tencent.com/document/product/551/104415)：说明开通服务、查看密钥和调用方式。
+- [腾讯云机器翻译计费概述](https://cloud.tencent.com/document/product/551/35017)：说明文本翻译免费额度和计费逻辑。
+- [腾讯云机器翻译请求限制](https://cloud.tencent.com/document/product/551/32572)：说明单次请求字符数限制。

@@ -1,1 +1,3 @@
 requests>=2.32.0
+tencentcloud-sdk-python-common>=3.0.129
+tencentcloud-sdk-python-tmt>=3.0.129
