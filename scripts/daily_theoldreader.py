@@ -625,23 +625,27 @@ def literature_digest_messages(rows: list[dict[str, str]]) -> list[dict[str, str
         核心规则：
         1. 只总结标题和摘要/网页摘要中的信息，不读取 PDF，也不要虚构摘要中没有的结论。
         2. 来源范围是 The Old Reader 的 SUBSCRIPTIONS 最新更新，不是 The Old Reader Picks，也不是额外扩展的公开 RSS。
-        3. 按 [必读]、[值得下载]、[扫读即可]、[跳过] 分组。
-        4. 对每篇进入 [必读]、[值得下载]、[扫读即可] 的研究条目，标题行必须带重要性标签：
-           ### [必读][高] 中文题名
-           ### [值得下载][中高] 中文题名
-           ### [扫读即可][中] 中文题名
+        3. 必须按期刊/订阅源分组，不要按 [必读]、[值得下载] 分大段。期刊用中文大写编号和加粗大写期刊名：
+           一、**NPJ COMPUTATIONAL MATERIALS**
+           二、**ADVANCED MATERIALS**
+           三、**ACTA MATERIALIA**
+        4. 同一期刊内论文用阿拉伯数字编号，格式固定为：
+           1. [必读][高] 中文题名
+           2. [值得下载][中高] 中文题名
+           3. [扫读即可][中] 中文题名
            重要性标签只能用 [高]、[中高]、[中]、[低]。
-        5. 每篇进入 [必读]、[值得下载]、[扫读即可] 的研究条目必须使用完全相同的五项结构，不允许只写摘要：
-           - **材料/体系：** 写清具体材料、体系、对象或数据集；未知则写“摘要未说明”。
-           - **新现象/机制：** 写清新现象、新机制、新方法或新设计；未知则写“摘要未说明”。
-           - **为什么重要：** 给出你对论文重要性的判断，连接到材料科学问题、瓶颈或潜在应用；不要空泛说“很重要”。
-           - **证据来源：** 说明依据来自 RSS 摘要、网页摘要、题名推断或摘要不足，并点明实验/计算/表征/模拟/数据集等证据类型。
-           - **建议：** 明确写“下载精读 / 下载复核 / 扫读图文 / 暂跳过”，并说明理由。
-        6. 每篇研究条目还要保留 DOI 或链接，格式为：
+        5. 每篇研究条目必须使用完全相同的 1-5 五项结构，不允许只写摘要，不要用短横线列表替代：
+           1. **材料/体系：** 写清具体材料、体系、对象或数据集；未知则写“摘要未说明”。
+           2. **新现象/机制：** 写清新现象、新机制、新方法或新设计；未知则写“摘要未说明”。
+           3. **为什么重要：** 给出你对论文重要性的判断，连接到材料科学问题、瓶颈或潜在应用；不要空泛说“很重要”。
+           4. **证据来源：** 说明依据来自 RSS 摘要、网页摘要、题名推断或摘要不足，并点明实验/计算/表征/模拟/数据集等证据类型。
+           5. **建议：** 明确写“下载精读 / 下载复核 / 扫读图文 / 暂跳过”，并说明理由。
+        6. 每篇研究条目在五项前保留 DOI 或链接，格式为：
            **来源：** feed | reader date | DOI/link
         7. 如果 summary_source 是 rss_insufficient，必须写“摘要不足，需要打开网页复核”，并且不要列为 [必读]。
-        8. 如果是生活、新闻、非学术、纯广告或无法判断的条目，放入 [跳过] 或忽略，并说明已过滤数量。
-        9. 输出适合直接作为邮件正文的 Markdown；不要输出“摘要：……”式流水账。
+        8. 如果是生活、新闻、非学术、纯广告或无法判断的条目，忽略正文并说明已过滤数量。
+        9. 输出适合直接作为邮件正文的 Markdown；不要输出“好的，这是……”等寒暄；正文第一行必须是“# 材料科学文献雷达 | 日期”。
+        10. 同一期刊内不要空很多行；每篇文章之间只空一行。
 
         条目 JSON：
         """
@@ -778,6 +782,74 @@ def make_digest(rows: list[dict[str, str]]) -> str:
     return f"{body}{skipped_note(skipped)}"
 
 
+def inline_markdown_to_html(text: str) -> str:
+    escaped = html.escape(text)
+    escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
+    escaped = re.sub(
+        r"(https?://[^\s<]+)",
+        r'<a href="\1">\1</a>',
+        escaped,
+    )
+    return escaped
+
+
+def markdown_digest_to_html(markdown_text: str) -> str:
+    """Render the constrained digest Markdown as compact email HTML."""
+
+    html_lines = [
+        "<!doctype html>",
+        '<html lang="zh-CN">',
+        "<head>",
+        '<meta charset="utf-8">',
+        "<style>",
+        "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',Arial,sans-serif;"
+        "font-size:15px;line-height:1.45;color:#1f2937;margin:0;padding:18px;background:#ffffff;}",
+        ".wrap{max-width:980px;margin:0 auto;}",
+        "h1{font-size:22px;line-height:1.3;margin:0 0 10px;color:#111827;}",
+        "h2{font-size:18px;line-height:1.3;margin:14px 0 6px;padding:6px 8px;"
+        "background:#eef2ff;border-left:4px solid #4f46e5;color:#111827;}",
+        "h3{font-size:15.5px;line-height:1.35;margin:8px 0 4px;color:#111827;}",
+        "p{margin:2px 0;}",
+        ".source{font-size:13px;color:#4b5563;margin:2px 0 4px;}",
+        ".field{margin:1px 0;}",
+        ".meta{font-size:13px;color:#4b5563;margin:2px 0;}",
+        ".filtered{font-size:13px;color:#6b7280;margin:2px 0;}",
+        "a{color:#2563eb;text-decoration:none;}",
+        "strong{font-weight:700;color:#111827;}",
+        "</style>",
+        "</head>",
+        "<body><div class=\"wrap\">",
+    ]
+
+    for raw_line in markdown_text.splitlines():
+        line = raw_line.strip()
+        if not line or line == "---":
+            continue
+        rendered = inline_markdown_to_html(line)
+
+        if line.startswith("# "):
+            html_lines.append(f"<h1>{inline_markdown_to_html(line[2:].strip())}</h1>")
+        elif line.startswith("## "):
+            html_lines.append(f"<h2>{inline_markdown_to_html(line[3:].strip())}</h2>")
+        elif line.startswith("### "):
+            html_lines.append(f"<h3>{inline_markdown_to_html(line[4:].strip())}</h3>")
+        elif re.match(r"^[一二三四五六七八九十]+、", line):
+            html_lines.append(f"<h2>{rendered}</h2>")
+        elif re.match(r"^\d+\.\s+\[", line):
+            html_lines.append(f"<h3>{rendered}</h3>")
+        elif line.startswith("**来源：**") or line.startswith("**来源:**"):
+            html_lines.append(f"<p class=\"source\">{rendered}</p>")
+        elif re.match(r"^\d+[\.）]\s*\*\*", line) or line.startswith("- **"):
+            html_lines.append(f"<p class=\"field\">{rendered}</p>")
+        elif line.startswith("- "):
+            html_lines.append(f"<p class=\"filtered\">{rendered}</p>")
+        else:
+            html_lines.append(f"<p class=\"meta\">{rendered}</p>")
+
+    html_lines.append("</div></body></html>")
+    return "\n".join(html_lines)
+
+
 def send_email(subject: str, body: str) -> None:
     host = require_env("SMTP_HOST")
     port = int(getenv("SMTP_PORT", "465"))
@@ -793,6 +865,7 @@ def send_email(subject: str, body: str) -> None:
     message["Subject"] = subject
     message["Date"] = formatdate(localtime=False)
     message.set_content(body)
+    message.add_alternative(markdown_digest_to_html(body), subtype="html")
 
     if use_ssl:
         with smtplib.SMTP_SSL(host, port, context=ssl.create_default_context(), timeout=45) as smtp:
