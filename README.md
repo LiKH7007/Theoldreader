@@ -33,14 +33,14 @@ MAIL_TO = 接收文献邮件的邮箱
 当前默认规则：
 
 1. 每天北京时间 08:00 自动运行。
-2. 读取 The Old Reader `SUBSCRIPTIONS` 中所有订阅源，不限定期刊。
-3. “不限定订阅源”只表示抓取范围宽；最终邮件默认只保留学术/论文条目。
-4. 默认过滤生活、购物、财经、娱乐、系统博客等非学术 feed，例如 Apartment Therapy、Man of Many、The Old Reader blog。
+2. 读取 The Old Reader `SUBSCRIPTIONS` 文件夹中的所有订阅源，不限定具体期刊。
+3. “不限定订阅源”指不限定 `SUBSCRIPTIONS` 文件夹里的期刊/出版社 feed，不是抓取 The Old Reader Picks、全站推荐或额外公开 RSS。
+4. 默认排除 The Old Reader Picks，例如 Apartment Therapy、Man of Many、The Old Reader blog 等。
 5. 默认抓取最近 24 小时内的最新条目。
 6. 默认不限制邮件条目数量；当天识别到多少文献就处理多少。
 7. 只总结 RSS 摘要或网页摘要，不下载、不读取 PDF。
 8. 如果 RSS 摘要太短，脚本会尝试打开原网页补 `meta description`、`citation_abstract` 或 Abstract 段落。
-9. 有 `OPENAI_API_KEY` 时优先生成中文文献雷达；没有 OpenAI 时可用腾讯云机器翻译，但腾讯云只做翻译 fallback，不做真正的论文优劣判断。
+9. 有 `OPENAI_API_KEY` 时优先生成中文文献雷达；没有 OpenAI 时可用腾讯云机器翻译，但腾讯云只做翻译 fallback，不做真正的论文优劣判断；都没有时发送结构化未评分列表。
 10. 所有 token、邮箱授权码和 API key 都只放在 GitHub Secrets，不写进仓库。
 
 ## 文件结构
@@ -100,7 +100,7 @@ Settings -> Secrets and variables -> Actions -> Secrets
 | `SMTP_PASSWORD` | 是 | 邮箱 SMTP 授权码，不是网页登录密码 |
 | `MAIL_FROM` | 是 | 发件人邮箱，通常必须和 `SMTP_USER` 完全一致 |
 | `MAIL_TO` | 是 | 收件人邮箱 |
-| `OPENAI_API_KEY` | 否 | 用 OpenAI 生成中文文献雷达 |
+| `OPENAI_API_KEY` | 强烈建议 | 用 OpenAI 生成中文文献雷达；如果要“材料/体系、新现象/机制、为什么重要、证据来源、建议”和重要性判断，就需要它 |
 | `TENCENT_SECRET_ID` | 否 | 腾讯云 SecretId |
 | `TENCENT_SECRET_KEY` | 否 | 腾讯云 SecretKey |
 
@@ -129,6 +129,7 @@ Settings -> Secrets and variables -> Actions -> Variables
 | `TOR_MAX_ITEMS` | `0` | 邮件最多处理多少条；`0` 表示不限制 |
 | `TOR_MIN_SUMMARY_CHARS` | `120` | RSS 摘要少于多少字符时尝试打开网页补摘要 |
 | `TOR_FETCH_ARTICLE_PAGE` | `true` | 是否在摘要不足时打开原网页补摘要 |
+| `TOR_INCLUDE_READER_PICKS` | `false` | 是否包含 The Old Reader Picks；默认不包含，只看 `SUBSCRIPTIONS` |
 | `TOR_INCLUDE_NON_RESEARCH` | `false` | 是否把生活/财经/系统 feed 等非学术条目也放进邮件正文；默认过滤 |
 | `TENCENT_REGION` | `ap-beijing` | 腾讯云机器翻译地域 |
 | `TENCENT_TARGET` | `zh` | 腾讯云目标语言，中文为 `zh` |
@@ -145,8 +146,11 @@ TOR_LOOKBACK_HOURS = 24
 TOR_ONLY_UNREAD = false
 TOR_MAX_ITEMS = 0
 TOR_FETCH_ARTICLE_PAGE = true
+TOR_INCLUDE_READER_PICKS = false
 TOR_INCLUDE_NON_RESEARCH = false
 ```
+
+这是推荐模式。只有 OpenAI 模式才会对每篇论文做真正的五项判断和重要性分级。
 
 如果不用 OpenAI，只想翻译摘要：
 
@@ -156,7 +160,7 @@ TENCENT_REGION = ap-beijing
 TENCENT_TARGET = zh
 ```
 
-这种模式只翻译标题和摘要，不会真正判断论文优劣。脚本仍会先过滤明显非学术条目，避免把生活资讯翻译成文献简报。
+这种模式只翻译标题和摘要，不会真正判断论文优劣。脚本仍会先过滤 The Old Reader Picks 和明显非学术条目，避免把生活资讯翻译成文献简报。
 
 ## 阅读准则
 
@@ -173,10 +177,23 @@ OpenAI 模式下，邮件会按文献雷达格式输出：
 
 ```text
 材料/体系
-新现象/机制/方法
+新现象/机制
 为什么重要
 证据来源
 建议动作
+```
+
+OpenAI 模式下，每篇进入 `[必读]`、`[值得下载]`、`[扫读即可]` 的研究条目都必须按下面五项输出，并给出 `[高] / [中高] / [中] / [低]` 重要性标签：
+
+```text
+### [必读][高] 论文中文题名
+**来源：** 订阅源 | reader date | DOI/link
+
+- **材料/体系：** ...
+- **新现象/机制：** ...
+- **为什么重要：** ...
+- **证据来源：** ...
+- **建议：** 下载精读 / 下载复核 / 扫读图文 / 暂跳过
 ```
 
 如果摘要不足，邮件会明确写：
@@ -228,7 +245,7 @@ OpenAI summarization failed; trying Tencent translation instead
 Tencent translation failed; sending fallback digest instead
 ```
 
-说明腾讯云翻译失败，脚本会退回基础英文/原文列表。
+说明腾讯云翻译失败，脚本会退回结构化未评分列表，不做重要性判断。
 
 ```text
 FailedOperation.UserNotRegistered: Service has not been opened

@@ -61,6 +61,11 @@ NON_ACADEMIC_FEED_RE = re.compile(
     r"sneakers|food|travel|entertainment",
     re.I,
 )
+READER_PICKS_RE = re.compile(
+    r"the old reader picks|apartment therapy|get rich slowly|what if\?|the old reader:|"
+    r"the daily what|man of many|cheezburger",
+    re.I,
+)
 ABSTRACT_RE = re.compile(
     r"(?:abstract|summary)\s*[:\n]\s*(.{120,2500}?)(?:\n\s*(?:introduction|keywords|references|全文|图文)|$)",
     re.I | re.S,
@@ -166,6 +171,25 @@ def fetch_subscriptions(token: str) -> list[dict[str, Any]]:
     return data.get("subscriptions", [])
 
 
+def subscription_scope_text(sub: dict[str, Any]) -> str:
+    parts = [str(sub.get("title", "")), str(sub.get("id", "")), str(sub.get("htmlUrl", ""))]
+    for category in sub.get("categories", []) or []:
+        if isinstance(category, dict):
+            parts.append(str(category.get("label", "")))
+            parts.append(str(category.get("id", "")))
+        else:
+            parts.append(str(category))
+    return " ".join(parts)
+
+
+def is_user_subscription(sub: dict[str, Any]) -> bool:
+    """Keep the user's SUBSCRIPTIONS by default; exclude The Old Reader Picks."""
+
+    if as_bool("TOR_INCLUDE_READER_PICKS", False):
+        return True
+    return not READER_PICKS_RE.search(subscription_scope_text(sub))
+
+
 def fetch_stream_items(
     token: str,
     stream_id: str,
@@ -239,9 +263,10 @@ def fetch_subscription_latest_items(token: str) -> list[dict[str, Any]]:
     lookback_hours = as_int("TOR_LOOKBACK_HOURS", 24)
     since_ts = int((dt.datetime.now(LOCAL_TZ) - dt.timedelta(hours=lookback_hours)).timestamp())
     unread_only = as_bool("TOR_ONLY_UNREAD", False)
-    subscriptions = fetch_subscriptions(token)
+    raw_subscriptions = fetch_subscriptions(token)
+    subscriptions = [sub for sub in raw_subscriptions if is_user_subscription(sub)]
     print(
-        f"Subscription latest mode: subscriptions={len(subscriptions)}, "
+        f"Subscription latest mode: subscriptions={len(subscriptions)}/{len(raw_subscriptions)}, "
         f"lookback_hours={lookback_hours}, unread_only={unread_only}"
     )
 
@@ -407,21 +432,27 @@ def fallback_digest(rows: list[dict[str, str]]) -> str:
     if not rows:
         return "今天 The Old Reader 的订阅源在设定时间窗口内没有抓到新条目。"
 
-    lines = ["# The Old Reader Daily Radar", "", "模式：订阅源最新更新；未使用 AI 摘要。", ""]
-    for index, row in enumerate(rows, 1):
-        lines.append(f"{index}. {row['title']}")
-        if row["feed"]:
-            lines.append(f"   - 订阅源: {row['feed']}")
-        if row["date"]:
-            lines.append(f"   - 日期: {row['date']}")
-        if row["doi"]:
-            lines.append(f"   - DOI: {row['doi']}")
-        if row["url"]:
-            lines.append(f"   - 链接: {row['url']}")
-        if row["summary"]:
-            lines.append(f"   - 摘要: {row['summary'][:500]}")
+    lines = [
+        "# The Old Reader Daily Radar",
+        "",
+        "模式：The Old Reader SUBSCRIPTIONS 最新更新",
+        "注意：当前未使用 OpenAI，也未使用腾讯云翻译；以下是结构化基础列表，不能可靠判断论文重要性。",
+        "",
+    ]
+    for row in rows:
+        lines.append(f"### [未评分] {row.get('title', '')}")
+        source_parts = [part for part in [row.get("feed", ""), row.get("date", ""), row.get("doi") or row.get("url", "")] if part]
+        if source_parts:
+            lines.append(f"**来源：** {' | '.join(source_parts)}")
+        lines.append("")
+        lines.append("- **材料/体系：** 未使用 OpenAI，无法可靠抽取。")
+        lines.append("- **新现象/机制：** 未使用 OpenAI，无法可靠判断。")
+        lines.append("- **为什么重要：** 未评分；需要 OpenAI 或人工阅读摘要后判断。")
+        lines.append("- **证据来源：** The Old Reader RSS/网页摘要；未做科学推理。")
+        if row.get("summary"):
+            lines.append(f"- **建议：** 先按题名相关性决定是否打开链接；摘要片段：{row['summary'][:500]}")
         else:
-            lines.append("   - 摘要: 摘要不足，需要打开网页复核。")
+            lines.append("- **建议：** 摘要不足，需要打开网页复核。")
         lines.append("")
     return "\n".join(lines).strip()
 
@@ -532,7 +563,14 @@ def tencent_digest(rows: list[dict[str, str]]) -> str:
 
     try:
         target = getenv("TENCENT_TARGET", "zh")
-        lines = ["# The Old Reader Daily Radar", "", "模式：订阅源最新更新", "翻译服务：腾讯云机器翻译", ""]
+        lines = [
+            "# The Old Reader Daily Radar",
+            "",
+            "模式：The Old Reader SUBSCRIPTIONS 最新更新",
+            "翻译服务：腾讯云机器翻译 fallback",
+            "注意：当前未使用 OpenAI，以下内容只翻译标题和摘要，不能可靠判断论文重要性。若要材料/体系、新现象/机制和重要性判断，请配置 OPENAI_API_KEY，并设置 DIGEST_PROVIDER=auto 或 openai。",
+            "",
+        ]
         for index, row in enumerate(rows, 1):
             title_zh = translate_with_tencent(row["title"], target=target)
             time.sleep(0.25)
@@ -541,20 +579,25 @@ def tencent_digest(rows: list[dict[str, str]]) -> str:
                 summary_zh = translate_with_tencent(row["summary"][:1000], target=target)
                 time.sleep(0.25)
 
-            lines.append(f"{index}. {title_zh or row['title']}")
-            lines.append(f"   - 原题: {row['title']}")
-            if row["feed"]:
-                lines.append(f"   - 订阅源: {row['feed']}")
-            if row["date"]:
-                lines.append(f"   - 日期: {row['date']}")
-            if row["doi"]:
-                lines.append(f"   - DOI: {row['doi']}")
-            if row["url"]:
-                lines.append(f"   - 链接: {row['url']}")
+            lines.append(f"### [未评分] {title_zh or row['title']}")
+            lines.append(f"**原题：** {row['title']}")
+            if row.get("feed"):
+                lines.append(f"**订阅源：** {row['feed']}")
+            if row.get("date"):
+                lines.append(f"**日期：** {row['date']}")
+            if row.get("doi"):
+                lines.append(f"**DOI：** {row['doi']}")
+            if row.get("url"):
+                lines.append(f"**链接：** {row['url']}")
+            lines.append("")
+            lines.append("- **材料/体系：** 未使用 OpenAI，无法从翻译 fallback 中可靠抽取。")
+            lines.append("- **新现象/机制：** 未使用 OpenAI，无法可靠判断；请看下方摘要译文或配置 OpenAI。")
+            lines.append("- **为什么重要：** 未评分。腾讯云只做机器翻译，不做科研重要性判断。")
+            lines.append("- **证据来源：** The Old Reader RSS/网页摘要的机器翻译。")
             if summary_zh:
-                lines.append(f"   - 摘要: {summary_zh}")
+                lines.append(f"- **建议：** 暂不据此判断是否下载；若题名与你课题相关，先打开链接看摘要。摘要译文：{summary_zh}")
             else:
-                lines.append("   - 摘要: 摘要不足，需要打开网页复核。")
+                lines.append("- **建议：** 摘要不足，需要打开网页复核。")
             lines.append("")
         return "\n".join(lines).strip()
     except Exception as exc:
@@ -586,16 +629,24 @@ def ai_digest(rows: list[dict[str, str]]) -> str:
 
         核心规则：
         1. 只总结标题和摘要/网页摘要中的信息，不读取 PDF，也不要虚构摘要中没有的结论。
-        2. 按 [必读]、[值得下载]、[扫读即可]、[跳过] 分组。
-        3. 每条 [必读] 或 [值得下载] 必须包含：
-           - 材料/体系
-           - 新现象/机制/方法
-           - 为什么重要
-           - 证据来源：RSS 摘要、网页摘要、题名推断、摘要不足
-           - 建议动作
-        4. 如果 summary_source 是 rss_insufficient，必须写“摘要不足，需要打开网页复核”，并且不要列为 [必读]。
-        5. 如果是生活、新闻、非学术、纯广告或无法判断的条目，放入 [跳过]。
-        6. 输出适合直接作为邮件正文的 Markdown。
+        2. 来源范围是 The Old Reader 的 SUBSCRIPTIONS 最新更新，不是 The Old Reader Picks，也不是额外扩展的公开 RSS。
+        3. 按 [必读]、[值得下载]、[扫读即可]、[跳过] 分组。
+        4. 对每篇进入 [必读]、[值得下载]、[扫读即可] 的研究条目，标题行必须带重要性标签：
+           ### [必读][高] 中文题名
+           ### [值得下载][中高] 中文题名
+           ### [扫读即可][中] 中文题名
+           重要性标签只能用 [高]、[中高]、[中]、[低]。
+        5. 每篇进入 [必读]、[值得下载]、[扫读即可] 的研究条目必须使用完全相同的五项结构，不允许只写摘要：
+           - **材料/体系：** 写清具体材料、体系、对象或数据集；未知则写“摘要未说明”。
+           - **新现象/机制：** 写清新现象、新机制、新方法或新设计；未知则写“摘要未说明”。
+           - **为什么重要：** 给出你对论文重要性的判断，连接到材料科学问题、瓶颈或潜在应用；不要空泛说“很重要”。
+           - **证据来源：** 说明依据来自 RSS 摘要、网页摘要、题名推断或摘要不足，并点明实验/计算/表征/模拟/数据集等证据类型。
+           - **建议：** 明确写“下载精读 / 下载复核 / 扫读图文 / 暂跳过”，并说明理由。
+        6. 每篇研究条目还要保留 DOI 或链接，格式为：
+           **来源：** feed | reader date | DOI/link
+        7. 如果 summary_source 是 rss_insufficient，必须写“摘要不足，需要打开网页复核”，并且不要列为 [必读]。
+        8. 如果是生活、新闻、非学术、纯广告或无法判断的条目，放入 [跳过] 或忽略，并说明已过滤数量。
+        9. 输出适合直接作为邮件正文的 Markdown；不要输出“摘要：……”式流水账。
 
         条目 JSON：
         """
