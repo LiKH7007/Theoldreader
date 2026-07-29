@@ -2,14 +2,14 @@ name: Daily The Old Reader Radar
 
 on:
   schedule:
-    # 07:00 Beijing time every day. GitHub Actions cron uses UTC.
-    - cron: "0 23 * * *"
+    # 08:00 Beijing time every day. GitHub Actions cron uses UTC.
+    - cron: "0 0 * * *"
   workflow_dispatch:
 
 jobs:
   send-radar:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
@@ -35,8 +35,14 @@ jobs:
           SMTP_SSL: ${{ vars.SMTP_SSL }}
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
           MAIL_TO: ${{ secrets.MAIL_TO }}
-          TOR_LIMIT: ${{ vars.TOR_LIMIT }}
+          TOR_SOURCE_MODE: ${{ vars.TOR_SOURCE_MODE }}
+          TOR_LOOKBACK_HOURS: ${{ vars.TOR_LOOKBACK_HOURS }}
+          TOR_ONLY_UNREAD: ${{ vars.TOR_ONLY_UNREAD }}
+          TOR_API_PAGE_SIZE: ${{ vars.TOR_API_PAGE_SIZE }}
+          TOR_MAX_PAGES_PER_FEED: ${{ vars.TOR_MAX_PAGES_PER_FEED }}
           TOR_MAX_ITEMS: ${{ vars.TOR_MAX_ITEMS }}
+          TOR_MIN_SUMMARY_CHARS: ${{ vars.TOR_MIN_SUMMARY_CHARS }}
+          TOR_FETCH_ARTICLE_PAGE: ${{ vars.TOR_FETCH_ARTICLE_PAGE }}
           TENCENT_SECRET_ID: ${{ secrets.TENCENT_SECRET_ID }}
           TENCENT_SECRET_KEY: ${{ secrets.TENCENT_SECRET_KEY }}
           TENCENT_REGION: ${{ vars.TENCENT_REGION }}
