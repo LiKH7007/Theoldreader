@@ -145,10 +145,29 @@ Settings -> Secrets and variables -> Actions -> Variables
 | `TOR_MAX_ITEMS` | `30` | 邮件里最多处理多少条 |
 | `TENCENT_REGION` | `ap-beijing` | 腾讯云机器翻译地域 |
 | `TENCENT_TARGET` | `zh` | 腾讯云目标语言，中文用 `zh` |
+| `DIGEST_PROVIDER` | `auto` | 摘要/翻译来源，可填 `auto`、`openai`、`tencent` |
 
 不想折腾的话，这一步可以先跳过。
 
 如果 `OPENAI_API_KEY` 没配、填错或额度不足，脚本会自动尝试腾讯云翻译。腾讯云也没配置时，才退回基础列表邮件。
+
+如果你想强制使用腾讯云翻译，不管是否配置了 OpenAI，请添加 Variable：
+
+```text
+DIGEST_PROVIDER = tencent
+```
+
+运行日志里会出现类似：
+
+```text
+Digest provider selection: requested=tencent, openai_configured=False, tencent_configured=True
+```
+
+邮件正文里会出现：
+
+```text
+翻译服务：腾讯云机器翻译
+```
 
 ## 第 4.1 步：开通腾讯云机器翻译
 

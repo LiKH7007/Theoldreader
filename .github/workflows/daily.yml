@@ -41,4 +41,5 @@ jobs:
           TENCENT_SECRET_KEY: ${{ secrets.TENCENT_SECRET_KEY }}
           TENCENT_REGION: ${{ vars.TENCENT_REGION }}
           TENCENT_TARGET: ${{ vars.TENCENT_TARGET }}
+          DIGEST_PROVIDER: ${{ vars.DIGEST_PROVIDER }}
         run: python scripts/daily_theoldreader.py

@@ -307,6 +307,30 @@ def ai_digest(rows: list[dict[str, str]]) -> str:
         return tencent_digest(rows) if has_tencent_credentials() else fallback_digest(rows)
 
 
+def make_digest(rows: list[dict[str, str]]) -> str:
+    provider = getenv("DIGEST_PROVIDER", "auto").lower()
+    openai_ready = bool(getenv("OPENAI_API_KEY"))
+    tencent_ready = has_tencent_credentials()
+    print(
+        "Digest provider selection: "
+        f"requested={provider}, openai_configured={openai_ready}, tencent_configured={tencent_ready}"
+    )
+
+    if provider in {"tencent", "tmt", "tencent-tmt"}:
+        if not tencent_ready:
+            print("DIGEST_PROVIDER=tencent was requested, but Tencent secrets are missing.", file=sys.stderr)
+            return fallback_digest(rows)
+        return tencent_digest(rows)
+
+    if provider == "openai":
+        return ai_digest(rows)
+
+    if provider not in {"auto", ""}:
+        print(f"Unknown DIGEST_PROVIDER={provider!r}; using auto.", file=sys.stderr)
+
+    return ai_digest(rows)
+
+
 def send_email(subject: str, body: str) -> None:
     host = require_env("SMTP_HOST")
     port = int(getenv("SMTP_PORT", "465"))
@@ -339,7 +363,7 @@ def main() -> int:
     today = dt.datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
     items = fetch_unread_items(token)
     rows = normalize_items(items)
-    body = ai_digest(rows)
+    body = make_digest(rows)
     subject = f"The Old Reader Daily Radar - {today} - {len(rows)} items"
     send_email(subject, body)
     print(f"Sent digest with {len(rows)} normalized items.")
