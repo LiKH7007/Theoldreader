@@ -236,6 +236,12 @@ Tencent translation failed; sending fallback digest instead
 说明腾讯云翻译失败了，但脚本会继续发送基础列表邮件。常见原因是 `TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY` 填错、机器翻译服务没开通、地域配置不合适，或免费额度用完。
 
 ```text
+module 'tencentcloud.tmt.v20180321.models' has no attribute 'TextTranslateRequest'
+```
+
+这是旧版本脚本使用腾讯云 Python SDK 时可能出现的问题。当前脚本已经改为直接调用腾讯云官方 HTTP API，不再依赖腾讯云 SDK。
+
+```text
 Node.js 20 is deprecated
 ```
 

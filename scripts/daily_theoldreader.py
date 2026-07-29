@@ -8,6 +8,8 @@ not print tokens, passwords, or full HTTP headers.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import hmac
 import html
 import json
 import os
@@ -179,33 +181,94 @@ def has_tencent_credentials() -> bool:
     return bool(tencent_secret("TENCENT_SECRET_ID") and tencent_secret("TENCENT_SECRET_KEY"))
 
 
-def build_tencent_client():
-    from tencentcloud.common import credential
-    from tencentcloud.common.profile.client_profile import ClientProfile
-    from tencentcloud.common.profile.http_profile import HttpProfile
-    from tencentcloud.tmt.v20180321 import tmt_client
-
-    cred = credential.Credential(tencent_secret("TENCENT_SECRET_ID"), tencent_secret("TENCENT_SECRET_KEY"))
-    http_profile = HttpProfile()
-    http_profile.endpoint = getenv("TENCENT_TMT_ENDPOINT", "tmt.tencentcloudapi.com")
-    client_profile = ClientProfile()
-    client_profile.httpProfile = http_profile
-    return tmt_client.TmtClient(cred, getenv("TENCENT_REGION", "ap-beijing"), client_profile)
+def sha256_hex(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def translate_with_tencent(client: Any, text: str, source: str = "auto", target: str = "zh") -> str:
-    from tencentcloud.tmt.v20180321 import models
+def hmac_sha256(key: bytes, value: str) -> bytes:
+    return hmac.new(key, value.encode("utf-8"), hashlib.sha256).digest()
 
+
+def translate_with_tencent(text: str, source: str = "auto", target: str = "zh") -> str:
     text = " ".join((text or "").split())
     if not text:
         return ""
-    req = models.TextTranslateRequest()
-    req.SourceText = text[:1800]
-    req.Source = source
-    req.Target = target
-    req.ProjectId = 0
-    resp = client.TextTranslate(req)
-    return resp.TargetText
+
+    secret_id = tencent_secret("TENCENT_SECRET_ID")
+    secret_key = tencent_secret("TENCENT_SECRET_KEY")
+    service = "tmt"
+    host = getenv("TENCENT_TMT_ENDPOINT", "tmt.tencentcloudapi.com")
+    region = getenv("TENCENT_REGION", "ap-beijing")
+    action = "TextTranslate"
+    version = "2018-03-21"
+    algorithm = "TC3-HMAC-SHA256"
+    timestamp = int(time.time())
+    date = dt.datetime.fromtimestamp(timestamp, dt.timezone.utc).strftime("%Y-%m-%d")
+
+    payload = json.dumps(
+        {
+            "SourceText": text[:1800],
+            "Source": source,
+            "Target": target,
+            "ProjectId": 0,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    canonical_headers = (
+        "content-type:application/json; charset=utf-8\n"
+        f"host:{host}\n"
+        f"x-tc-action:{action.lower()}\n"
+    )
+    signed_headers = "content-type;host;x-tc-action"
+    canonical_request = "\n".join(
+        [
+            "POST",
+            "/",
+            "",
+            canonical_headers,
+            signed_headers,
+            sha256_hex(payload),
+        ]
+    )
+    credential_scope = f"{date}/{service}/tc3_request"
+    string_to_sign = "\n".join(
+        [
+            algorithm,
+            str(timestamp),
+            credential_scope,
+            sha256_hex(canonical_request),
+        ]
+    )
+    secret_date = hmac_sha256(("TC3" + secret_key).encode("utf-8"), date)
+    secret_service = hmac_sha256(secret_date, service)
+    secret_signing = hmac_sha256(secret_service, "tc3_request")
+    signature = hmac.new(secret_signing, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
+    authorization = (
+        f"{algorithm} Credential={secret_id}/{credential_scope}, "
+        f"SignedHeaders={signed_headers}, Signature={signature}"
+    )
+    response = requests.post(
+        f"https://{host}",
+        headers={
+            "Authorization": authorization,
+            "Content-Type": "application/json; charset=utf-8",
+            "Host": host,
+            "X-TC-Action": action,
+            "X-TC-Version": version,
+            "X-TC-Timestamp": str(timestamp),
+            "X-TC-Region": region,
+        },
+        data=payload.encode("utf-8"),
+        timeout=45,
+    )
+    response.raise_for_status()
+    data = response.json()
+    result = data.get("Response", {})
+    if result.get("Error"):
+        error = result["Error"]
+        raise RuntimeError(f"{error.get('Code')}: {error.get('Message')}")
+    return result.get("TargetText", "")
 
 
 def tencent_digest(rows: list[dict[str, str]]) -> str:
@@ -215,15 +278,14 @@ def tencent_digest(rows: list[dict[str, str]]) -> str:
         return fallback_digest(rows)
 
     try:
-        client = build_tencent_client()
         target = getenv("TENCENT_TARGET", "zh")
         lines = ["# The Old Reader Daily Digest", "", "翻译服务：腾讯云机器翻译", ""]
         for index, row in enumerate(rows, 1):
-            title_zh = translate_with_tencent(client, row["title"], target=target)
+            title_zh = translate_with_tencent(row["title"], target=target)
             time.sleep(0.25)
             summary_zh = ""
             if row["summary"]:
-                summary_zh = translate_with_tencent(client, row["summary"][:900], target=target)
+                summary_zh = translate_with_tencent(row["summary"][:900], target=target)
                 time.sleep(0.25)
 
             lines.append(f"{index}. {title_zh or row['title']}")
