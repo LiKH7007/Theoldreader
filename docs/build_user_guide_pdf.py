@@ -12,7 +12,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
-OUT = Path("E:/a_codex/other/theoldreader_update/docs/TheOldReader_Daily_Radar_User_Guide.pdf")
+OUT = Path(__file__).with_name("TheOldReader_Daily_Radar_User_Guide.pdf")
 
 
 def register_font() -> str:
