@@ -155,7 +155,7 @@ def fetch_stream_items(
     """
 
     page_size = min(max(as_int("TOR_API_PAGE_SIZE", 100), 1), 1000)
-    max_pages = as_int("TOR_MAX_PAGES_PER_FEED", 20)
+    max_pages = as_int("TOR_MAX_PAGES_PER_FEED", 0)
     items: list[dict[str, Any]] = []
     continuation = ""
     pages = 0

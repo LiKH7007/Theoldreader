@@ -99,7 +99,7 @@ def main() -> None:
         ["TOR_LOOKBACK_HOURS", "24", "抓最近多少小时内的新条目。每天运行一次时建议 24。"],
         ["TOR_ONLY_UNREAD", "false", "是否只抓未读。默认 false，表示按最新更新抓，不看已读/未读。"],
         ["TOR_API_PAGE_SIZE", "100", "每个订阅源每次 API 请求抓多少条，最大 1000。"],
-        ["TOR_MAX_PAGES_PER_FEED", "20", "单个订阅源最多翻多少页，防止异常活跃 feed 抓太久。"],
+        ["TOR_MAX_PAGES_PER_FEED", "0", "单个订阅源最多翻多少页；0 表示不设页数上限，想加保险丝可设为 20。"],
         ["TOR_MAX_ITEMS", "0", "邮件最多处理多少条。0 表示不人为限制数量。"],
         ["TOR_MIN_SUMMARY_CHARS", "120", "RSS 摘要低于该长度时，尝试打开原网页补摘要。"],
         ["TOR_FETCH_ARTICLE_PAGE", "true", "是否在摘要不足时请求文章网页。"],

@@ -95,7 +95,7 @@ Settings -> Secrets and variables -> Actions -> Variables
 | `TOR_LOOKBACK_HOURS` | `24` | 抓最近多少小时内的新条目 |
 | `TOR_ONLY_UNREAD` | `false` | 是否只抓未读；默认抓最新更新，不限已读/未读 |
 | `TOR_API_PAGE_SIZE` | `100` | 每次 API 请求每个订阅源最多取多少条，最大 1000 |
-| `TOR_MAX_PAGES_PER_FEED` | `20` | 单个订阅源最多翻多少页；防止异常 feed 无限抓取 |
+| `TOR_MAX_PAGES_PER_FEED` | `0` | 单个订阅源最多翻多少页；`0` 表示不设页数上限，想加保险丝可设为 `20` |
 | `TOR_MAX_ITEMS` | `0` | 邮件最多处理多少条；`0` 表示不限制 |
 | `TOR_MIN_SUMMARY_CHARS` | `120` | RSS 摘要少于多少字符时尝试打开网页补摘要 |
 | `TOR_FETCH_ARTICLE_PAGE` | `true` | 是否在摘要不足时打开原网页补摘要 |
