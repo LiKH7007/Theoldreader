@@ -88,14 +88,19 @@ def main() -> None:
 
     story.append(p("3. 可选的 AI / 翻译 Secrets", h1))
     story.append(p("OPENAI_API_KEY：配置后可生成真正的中文文献雷达，包括材料/体系、新现象/机制、重要性、证据与建议。", body))
+    story.append(p("DEEPSEEK_KEY：配置后可用 DeepSeek 生成中文文献雷达，可作为 OpenAI API 429 或无额度时的替代。", body))
     story.append(p("TENCENT_SECRET_ID 与 TENCENT_SECRET_KEY：配置后可用腾讯云机器翻译作为 fallback。腾讯云只能翻译标题和摘要，不能替代科学判断。", body))
 
     story.append(PageBreak())
     story.append(p("4. GitHub Variables 参数说明", h1))
     vars_table = [
         ["变量", "默认值", "作用"],
-        ["DIGEST_PROVIDER", "auto", "摘要来源：auto、openai、tencent。auto 会优先 OpenAI，再腾讯云，再结构化未评分列表。"],
+        ["DIGEST_PROVIDER", "auto", "摘要来源：auto、openai、deepseek、tencent。auto 会优先 OpenAI，再 DeepSeek，再腾讯云。"],
         ["OPENAI_MODEL", "gpt-4.1-mini", "OpenAI 摘要模型。"],
+        ["DEEPSEEK_MODEL", "deepseek-v4-flash", "DeepSeek 摘要模型；也可设 deepseek-v4-pro。"],
+        ["DEEPSEEK_BASE_URL", "https://api.deepseek.com", "DeepSeek OpenAI-compatible API 地址。"],
+        ["DEEPSEEK_THINKING", "false", "是否启用 thinking；日报建议先用 false。"],
+        ["DEEPSEEK_REASONING_EFFORT", "high", "启用 thinking 时的推理强度。"],
         ["SMTP_SSL", "true", "是否使用 SMTP SSL。大多数邮箱 465 端口用 true。"],
         ["TOR_SOURCE_MODE", "subscriptions_latest", "默认读取 SUBSCRIPTIONS 文件夹的最新更新，不扩展公开 RSS。"],
         ["TOR_LOOKBACK_HOURS", "24", "抓最近多少小时内的新条目。每天运行一次时建议 24。"],
@@ -130,6 +135,11 @@ def main() -> None:
     story.append(p("有 OpenAI 时：", h2))
     story.append(p(
         "DIGEST_PROVIDER = auto\nOPENAI_MODEL = gpt-4.1-mini\nTOR_SOURCE_MODE = subscriptions_latest\nTOR_LOOKBACK_HOURS = 24\nTOR_ONLY_UNREAD = false\nTOR_MAX_ITEMS = 0\nTOR_FETCH_ARTICLE_PAGE = true\nTOR_INCLUDE_READER_PICKS = false\nTOR_INCLUDE_NON_RESEARCH = false",
+        code,
+    ))
+    story.append(p("使用 DeepSeek 时：", h2))
+    story.append(p(
+        "DIGEST_PROVIDER = deepseek\nDEEPSEEK_MODEL = deepseek-v4-flash\nDEEPSEEK_BASE_URL = https://api.deepseek.com\nDEEPSEEK_THINKING = false\nTOR_SOURCE_MODE = subscriptions_latest\nTOR_LOOKBACK_HOURS = 24\nTOR_ONLY_UNREAD = false\nTOR_MAX_ITEMS = 30\nTOR_FETCH_ARTICLE_PAGE = true\nTOR_INCLUDE_READER_PICKS = false\nTOR_INCLUDE_NON_RESEARCH = false",
         code,
     ))
     story.append(p("只用腾讯云翻译时（只能翻译，不能做重要性判断）：", h2))

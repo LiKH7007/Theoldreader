@@ -617,12 +617,7 @@ def parse_openai_text(data: dict[str, Any]) -> str:
     return "\n".join(chunks).strip()
 
 
-def ai_digest(rows: list[dict[str, str]]) -> str:
-    api_key = getenv("OPENAI_API_KEY")
-    if not api_key or not rows:
-        return tencent_digest(rows) if has_tencent_credentials() else fallback_digest(rows)
-
-    model = getenv("OPENAI_MODEL", "gpt-4.1-mini")
+def literature_digest_messages(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     prompt = textwrap.dedent(
         """
         请把下面 The Old Reader 订阅源最新更新条目整理成中文每日文献雷达。
@@ -651,18 +646,27 @@ def ai_digest(rows: list[dict[str, str]]) -> str:
         条目 JSON：
         """
     ).strip()
+    return [
+        {
+            "role": "system",
+            "content": "你是材料科学文献雷达助手，偏好准确、具体、可行动的中文摘要。",
+        },
+        {
+            "role": "user",
+            "content": f"{prompt}\n{json.dumps(rows, ensure_ascii=False, indent=2)}",
+        },
+    ]
+
+
+def ai_digest(rows: list[dict[str, str]]) -> str:
+    api_key = getenv("OPENAI_API_KEY")
+    if not api_key or not rows:
+        return tencent_digest(rows) if has_tencent_credentials() else fallback_digest(rows)
+
+    model = getenv("OPENAI_MODEL", "gpt-4.1-mini")
     payload = {
         "model": model,
-        "input": [
-            {
-                "role": "system",
-                "content": "你是材料科学文献雷达助手，偏好准确、具体、可行动的中文摘要。",
-            },
-            {
-                "role": "user",
-                "content": f"{prompt}\n{json.dumps(rows, ensure_ascii=False, indent=2)}",
-            },
-        ],
+        "input": literature_digest_messages(rows),
         "temperature": 0.2,
     }
     try:
@@ -679,7 +683,55 @@ def ai_digest(rows: list[dict[str, str]]) -> str:
         text = parse_openai_text(response.json())
         return text or fallback_digest(rows)
     except requests.RequestException as exc:
-        print(f"OpenAI summarization failed; trying Tencent translation instead: {exc}", file=sys.stderr)
+        print(f"OpenAI summarization failed; trying DeepSeek or Tencent fallback instead: {exc}", file=sys.stderr)
+        if getenv("DEEPSEEK_KEY") or getenv("DEEPSEEK_API_KEY"):
+            return deepseek_digest(rows)
+        return tencent_digest(rows) if has_tencent_credentials() else fallback_digest(rows)
+
+
+def parse_chat_completion_text(data: dict[str, Any]) -> str:
+    choices = data.get("choices", [])
+    if not choices:
+        return ""
+    message = choices[0].get("message") or {}
+    content = message.get("content")
+    return content.strip() if isinstance(content, str) else ""
+
+
+def deepseek_digest(rows: list[dict[str, str]]) -> str:
+    api_key = getenv("DEEPSEEK_KEY") or getenv("DEEPSEEK_API_KEY")
+    if not api_key or not rows:
+        return tencent_digest(rows) if has_tencent_credentials() else fallback_digest(rows)
+
+    base_url = getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
+    model = getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": literature_digest_messages(rows),
+        "temperature": 0.2,
+        "stream": False,
+    }
+    if as_bool("DEEPSEEK_THINKING", False):
+        payload["thinking"] = {"type": "enabled"}
+        payload["reasoning_effort"] = getenv("DEEPSEEK_REASONING_EFFORT", "high")
+    else:
+        payload["thinking"] = {"type": "disabled"}
+
+    try:
+        response = requests.post(
+            f"{base_url}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=120,
+        )
+        response.raise_for_status()
+        text = parse_chat_completion_text(response.json())
+        return text or fallback_digest(rows)
+    except requests.RequestException as exc:
+        print(f"DeepSeek summarization failed; trying Tencent translation instead: {exc}", file=sys.stderr)
         return tencent_digest(rows) if has_tencent_credentials() else fallback_digest(rows)
 
 
@@ -690,10 +742,12 @@ def make_digest(rows: list[dict[str, str]]) -> str:
 
     provider = getenv("DIGEST_PROVIDER", "auto").lower()
     openai_ready = bool(getenv("OPENAI_API_KEY"))
+    deepseek_ready = bool(getenv("DEEPSEEK_KEY") or getenv("DEEPSEEK_API_KEY"))
     tencent_ready = has_tencent_credentials()
     print(
         "Digest provider selection: "
-        f"requested={provider}, openai_configured={openai_ready}, tencent_configured={tencent_ready}"
+        f"requested={provider}, openai_configured={openai_ready}, "
+        f"deepseek_configured={deepseek_ready}, tencent_configured={tencent_ready}"
     )
 
     if provider in {"tencent", "tmt", "tencent-tmt"}:
@@ -707,10 +761,21 @@ def make_digest(rows: list[dict[str, str]]) -> str:
     if provider == "openai":
         return f"{ai_digest(literature_rows)}{skipped_note(skipped)}"
 
+    if provider in {"deepseek", "deepseek-chat", "deepseek-v4"}:
+        return f"{deepseek_digest(literature_rows)}{skipped_note(skipped)}"
+
     if provider not in {"auto", ""}:
         print(f"Unknown DIGEST_PROVIDER={provider!r}; using auto.", file=sys.stderr)
 
-    return f"{ai_digest(literature_rows)}{skipped_note(skipped)}"
+    if openai_ready:
+        body = ai_digest(literature_rows)
+    elif deepseek_ready:
+        body = deepseek_digest(literature_rows)
+    elif tencent_ready:
+        body = tencent_digest(literature_rows)
+    else:
+        body = fallback_digest(literature_rows)
+    return f"{body}{skipped_note(skipped)}"
 
 
 def send_email(subject: str, body: str) -> None:

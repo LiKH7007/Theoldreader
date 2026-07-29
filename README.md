@@ -40,7 +40,7 @@ MAIL_TO = 接收文献邮件的邮箱
 6. 默认不限制邮件条目数量；当天识别到多少文献就处理多少。
 7. 只总结 RSS 摘要或网页摘要，不下载、不读取 PDF。
 8. 如果 RSS 摘要太短，脚本会尝试打开原网页补 `meta description`、`citation_abstract` 或 Abstract 段落。
-9. 有 `OPENAI_API_KEY` 时优先生成中文文献雷达；没有 OpenAI 时可用腾讯云机器翻译，但腾讯云只做翻译 fallback，不做真正的论文优劣判断；都没有时发送结构化未评分列表。
+9. 有 `OPENAI_API_KEY` 或 `DEEPSEEK_KEY` 时可生成中文文献雷达；腾讯云只做翻译 fallback，不做真正的论文优劣判断；都没有时发送结构化未评分列表。
 10. 所有 token、邮箱授权码和 API key 都只放在 GitHub Secrets，不写进仓库。
 
 ## 文件结构
@@ -101,6 +101,7 @@ Settings -> Secrets and variables -> Actions -> Secrets
 | `MAIL_FROM` | 是 | 发件人邮箱，通常必须和 `SMTP_USER` 完全一致 |
 | `MAIL_TO` | 是 | 收件人邮箱 |
 | `OPENAI_API_KEY` | 强烈建议 | 用 OpenAI 生成中文文献雷达；如果要“材料/体系、新现象/机制、为什么重要、证据来源、建议”和重要性判断，就需要它 |
+| `DEEPSEEK_KEY` | 可选 | 用 DeepSeek 生成中文文献雷达；可作为 OpenAI API 429 或无额度时的替代 |
 | `TENCENT_SECRET_ID` | 否 | 腾讯云 SecretId |
 | `TENCENT_SECRET_KEY` | 否 | 腾讯云 SecretKey |
 
@@ -118,8 +119,12 @@ Settings -> Secrets and variables -> Actions -> Variables
 
 | 名称 | 默认值 | 含义 |
 | --- | --- | --- |
-| `DIGEST_PROVIDER` | `auto` | 摘要来源：`auto`、`openai`、`tencent` |
+| `DIGEST_PROVIDER` | `auto` | 摘要来源：`auto`、`openai`、`deepseek`、`tencent` |
 | `OPENAI_MODEL` | `gpt-4.1-mini` | OpenAI 摘要模型 |
+| `DEEPSEEK_MODEL` | `deepseek-v4-flash` | DeepSeek 摘要模型；也可设 `deepseek-v4-pro` |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | DeepSeek OpenAI-compatible API 地址 |
+| `DEEPSEEK_THINKING` | `false` | 是否启用 DeepSeek thinking；日报建议先用 `false` 降低成本和延迟 |
+| `DEEPSEEK_REASONING_EFFORT` | `high` | 启用 thinking 时的 reasoning effort |
 | `SMTP_SSL` | `true` | 是否使用 SMTP SSL |
 | `TOR_SOURCE_MODE` | `subscriptions_latest` | 抓取模式；默认读取所有订阅源最新更新 |
 | `TOR_LOOKBACK_HOURS` | `24` | 抓最近多少小时内的新条目 |
@@ -151,6 +156,24 @@ TOR_INCLUDE_NON_RESEARCH = false
 ```
 
 这是推荐模式。只有 OpenAI 模式才会对每篇论文做真正的五项判断和重要性分级。
+
+如果你使用 DeepSeek：
+
+```text
+DIGEST_PROVIDER = deepseek
+DEEPSEEK_MODEL = deepseek-v4-flash
+DEEPSEEK_BASE_URL = https://api.deepseek.com
+DEEPSEEK_THINKING = false
+TOR_SOURCE_MODE = subscriptions_latest
+TOR_LOOKBACK_HOURS = 24
+TOR_ONLY_UNREAD = false
+TOR_MAX_ITEMS = 30
+TOR_FETCH_ARTICLE_PAGE = true
+TOR_INCLUDE_READER_PICKS = false
+TOR_INCLUDE_NON_RESEARCH = false
+```
+
+这种模式也会按“材料/体系、新现象/机制、为什么重要、证据来源、建议”五项生成文献判断。若需要更强推理，可把 `DEEPSEEK_MODEL` 改为 `deepseek-v4-pro`，或把 `DEEPSEEK_THINKING` 改为 `true`。
 
 如果不用 OpenAI，只想翻译摘要：
 
@@ -239,7 +262,7 @@ HTTP request failed with status 403
 OpenAI summarization failed; trying Tencent translation instead
 ```
 
-说明 OpenAI 摘要失败，脚本会尝试腾讯云翻译 fallback。
+说明 OpenAI 摘要失败，脚本会优先尝试 DeepSeek fallback；如果没有 DeepSeek，再尝试腾讯云翻译 fallback。
 
 ```text
 Tencent translation failed; sending fallback digest instead
