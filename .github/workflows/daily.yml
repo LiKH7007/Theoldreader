@@ -2,8 +2,9 @@ name: Daily The Old Reader Radar
 
 on:
   schedule:
-    # 08:00 Beijing time every day. GitHub Actions cron uses UTC.
-    - cron: "50 0 * * *"
+    # Temporary schedule test: run every 5 minutes.
+    # After confirming schedule works, change this back to a daily cron.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
