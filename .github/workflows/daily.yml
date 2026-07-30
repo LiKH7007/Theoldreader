@@ -3,7 +3,7 @@ name: Daily The Old Reader Radar
 on:
   schedule:
     # 08:00 Beijing time every day. GitHub Actions cron uses UTC.
-    - cron: "0 0 * * *"
+    - cron: "50 0 * * *"
   workflow_dispatch:
 
 jobs:
