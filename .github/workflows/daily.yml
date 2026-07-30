@@ -1,23 +1,31 @@
 name: Daily The Old Reader Radar
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     # Temporary schedule test: run every 5 minutes.
     # After confirming schedule works, change this back to a daily cron.
     - cron: "*/5 * * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   send-radar:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      TZ: Asia/Shanghai
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
